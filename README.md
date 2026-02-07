@@ -1,0 +1,148 @@
+# 🎯 Avnex - Smart AI Interview Assistant
+
+An intelligent AI-powered interview preparation platform that provides real-time feedback on body language, speech analysis, and interview performance.
+
+## 🌟 Features
+
+- **Real-time Body Language Analysis**: AI-powered pose detection and confidence scoring
+- **Speech-to-Text Transcription**: Accurate voice recognition for interview responses
+- **AI Interview Feedback**: Intelligent analysis of answers and suggestions for improvement
+- **Interactive UI**: Modern, responsive interface built with React
+- **Live Video Feed**: Real-time webcam integration for practice sessions
+
+## 🛠️ Tech Stack
+
+### Frontend
+- React 18
+- Vite
+- TailwindCSS
+- Axios
+
+### Backend
+- Flask
+- MediaPipe (Pose Detection)
+- OpenAI API
+- Python 3.11
+
+## 📋 Prerequisites
+
+- Node.js (v16 or higher)
+- Python 3.11
+- OpenAI API Key
+
+## 🚀 Installation
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/Avnavteotia/Ai_interview_Assistant.git
+cd Ai_interview_Assistant
+```
+
+### 2. Backend Setup
+```bash
+cd backend
+
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# Windows:
+venv\Scripts\activate
+# Mac/Linux:
+source venv/bin/activate
+
+# Install dependencies
+pip install flask flask-cors python-dotenv mediapipe opencv-python numpy
+
+# Create .env file
+echo "OPENAI_API_KEY=your_openai_api_key_here" > .env
+```
+
+### 3. Frontend Setup
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+### 4. Run the Application
+
+**Terminal 1 - Backend:**
+```bash
+cd backend
+python app.py
+```
+
+**Terminal 2 - Frontend:**
+```bash
+cd frontend
+npm run dev
+```
+
+Access the application at `http://localhost:5173`
+
+## 🔑 Environment Variables
+
+Create a `.env` file in the `backend` directory:
+
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+Get your OpenAI API key from: https://platform.openai.com/api-keys
+
+## 📁 Project Structure
+
+```
+Ai_interview_Assistant/
+├── backend/
+│   ├── utils/
+│   │   └── pose_analysis.py    # Body language analysis
+│   ├── app.py                  # Flask server
+│   ├── procfile                # Deployment config
+│   └── runtime.txt             # Python version
+├── frontend/
+│   ├── src/
+│   │   ├── components/         # React components
+│   │   ├── services/           # API services
+│   │   ├── hooks/              # Custom hooks
+│   │   └── App.jsx             # Main app component
+│   ├── package.json
+│   └── vite.config.js
+└── README.md
+```
+
+## 🎮 Usage
+
+1. **Start Interview Session**: Click "Start Interview" to begin
+2. **Enable Camera**: Allow camera access for body language analysis
+3. **Answer Questions**: Speak your answers clearly
+4. **Get Feedback**: Receive real-time feedback on your performance
+5. **Review Results**: Check detailed analysis and improvement suggestions
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📝 License
+
+This project is open source and available under the MIT License.
+
+## 👨‍💻 Author
+
+**Avnav Teotia**
+- GitHub: [@Avnavteotia](https://github.com/Avnavteotia)
+
+## 🙏 Acknowledgments
+
+- OpenAI for GPT API
+- MediaPipe for pose detection
+- React and Vite communities
+
+## 📧 Contact
+
+For questions or support, please open an issue on GitHub.
