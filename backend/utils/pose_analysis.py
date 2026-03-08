@@ -1,22 +1,19 @@
 # backend/utils/pose_analysis.py - Body language analysis
-import cv2
-import mediapipe as mp
-import numpy as np
+# import cv2
 import base64
 import io
+# import numpy as np
 from PIL import Image
+
+# Mediapipe is crashing on Windows with STATUS_DLL_NOT_FOUND (-1073741510)
+# Disabling for now to restore `generateQuestions` functionality.
+# import mediapipe as mp
 
 class BodyLanguageAnalyzer:
     def __init__(self):
-        self.mp_pose = mp.solutions.pose
-        self.pose = self.mp_pose.Pose(
-            static_image_mode=False,
-            model_complexity=1,
-            enable_segmentation=False,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-        )
-        self.mp_drawing = mp.solutions.drawing_utils
+        self.mp_pose = None
+        self.pose = None
+        self.mp_drawing = None
 
     def analyze_confidence(self, image_data):
         """

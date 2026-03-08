@@ -1,13 +1,22 @@
 # backend/app.py - This is our main server file
+# -*- coding: utf-8 -*-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
+import sys
 import json
 from dotenv import load_dotenv
 from openai import OpenAI
 
+# Fix Windows console encoding
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except:
+        pass
+
 # ✅ CHANGE: Import pose analysis utility
-from utils.pose_analysis import BodyLanguageAnalyzer
+# from utils.pose_analysis import BodyLanguageAnalyzer
 
 # Load environment variables from .env file
 load_dotenv()
@@ -17,7 +26,7 @@ app = Flask(__name__)
 CORS(app)  # Allow frontend to connect to backend
 
 # ✅ CHANGE: Create BodyLanguageAnalyzer instance
-analyzer = BodyLanguageAnalyzer()
+analyzer = None # BodyLanguageAnalyzer()
 
 # Initialize OpenAI client with configurable base URL for NVIDIA NIM support
 client = OpenAI(
@@ -68,22 +77,26 @@ import re
 
 def extract_json(text):
     """Extract JSON from LLM response, handling markdown code blocks."""
-    # Try direct parse first
     text = text.strip()
+    
+    # Try direct parse first
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
     
-    # Try extracting from markdown code block
-    match = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
-    if match:
-        try:
-            return json.loads(match.group(1).strip())
-        except json.JSONDecodeError:
-            pass
+    # Remove markdown code blocks
+    text = re.sub(r'```(?:json)?\s*', '', text)
+    text = re.sub(r'```\s*', '', text)
+    text = text.strip()
     
-    # Try finding JSON array or object pattern
+    # Try again after removing markdown
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    
+    # Find JSON array or object
     match = re.search(r'(\[[\s\S]*\]|\{[\s\S]*\})', text)
     if match:
         try:
@@ -91,7 +104,7 @@ def extract_json(text):
         except json.JSONDecodeError:
             pass
     
-    raise ValueError(f"Could not extract JSON from response: {text[:200]}")
+    raise ValueError(f"Could not extract JSON from: {text[:300]}")
 
 # Generate interview questions using AI
 @app.route('/api/generate-questions', methods=['POST'])
@@ -102,46 +115,46 @@ def generate_questions():
         level = data.get('level')
         count = data.get('count', 5)
         
-        prompt = f"""You are an expert interviewer conducting a real interview for a {role} position.
-Generate exactly {count} verbal interview questions that an interviewer would ASK OUT LOUD in a real interview.
+        print(f"\n=== Generating {count} questions for {role} ({level}) ===")
+        
+        prompt = f"""Generate {count} interview questions for a {role} position at {level} level.
 
-Experience level: {level}
-- If fresher/entry-level: Ask about fundamentals, learning ability, projects, and basic concepts
-- If intermediate: Ask about practical experience, problem-solving, and real-world scenarios
-- If senior: Ask about architecture decisions, leadership, mentoring, and complex system design
+Rules:
+- Return ONLY a JSON array
+- Each question must have "question" and "difficulty" fields
+- Difficulty: "easy", "medium", or "hard"
+- Questions should be verbal, not coding exercises
 
-IMPORTANT RULES:
-- Questions must be conversational and spoken naturally (not written/technical test style)
-- Questions should be ones a candidate can ANSWER VERBALLY (not coding challenges)
-- Include follow-up style questions like "Tell me about a time when..." or "How would you approach..."
-- No questions requiring writing code, diagrams, or whiteboard work
+Example format:
+[{{"question":"Tell me about yourself","difficulty":"easy"}},{{"question":"Explain REST APIs","difficulty":"medium"}}]
 
-You MUST respond with ONLY a valid JSON array. No extra text, no markdown.
-Format: [{{"question": "your question here", "difficulty": "easy"}}]
-Difficulty must be one of: "easy", "medium", "hard"
-Generate exactly {count} questions."""
+Generate {count} questions now:"""
         
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": "You are a JSON generator. Respond with ONLY valid JSON arrays. No markdown, no explanation."},
+                {"role": "system", "content": "You generate JSON arrays of interview questions. Return only valid JSON, no markdown."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7
+            temperature=0.7,
+            max_tokens=2000
         )
         
-        raw_content = response.choices[0].message.content
-        print(f"Raw AI response: {raw_content[:300]}")
+        raw_content = response.choices[0].message.content.strip()
+        print(f"Raw response: {raw_content[:500]}")
+        
         questions = extract_json(raw_content)
         
-        # Validate structure
-        if not isinstance(questions, list):
-            raise ValueError("Response is not a JSON array")
+        if not isinstance(questions, list) or len(questions) == 0:
+            raise ValueError("Invalid response format")
         
+        print(f"✓ Generated {len(questions)} questions")
         return jsonify({"questions": questions})
     
     except Exception as e:
-        print(f"Error generating questions: {e}")
+        print(f"✗ Error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 # Evaluate a single interview answer using AI
@@ -270,4 +283,9 @@ JSON format:
 
 # Run the app
 if __name__ == '__main__':
+    print("\n" + "="*50)
+    print("🚀 AI Interview Assistant Backend Starting...")
+    print(f"📡 API: {os.getenv('OPENAI_BASE_URL', 'OpenAI')}")
+    print(f"🤖 Model: {MODEL_NAME}")
+    print("="*50 + "\n")
     app.run(debug=True, port=5000)
