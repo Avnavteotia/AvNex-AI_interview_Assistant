@@ -1,6 +1,8 @@
-// frontend/src/components/InterviewRoom.jsx - Interview interface
 import React, { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { Canvas } from '@react-three/fiber'
+import { OrbitControls, Environment } from '@react-three/drei'
+import { Avatar } from './Avatar'
 import SpeechService from '../services/speech'
 import AIService from '../services/ai'
 
@@ -18,6 +20,10 @@ const InterviewRoom = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isEvaluating, setIsEvaluating] = useState(false)
   const [answerSubmitted, setAnswerSubmitted] = useState(false)
+
+  // AI Speech state
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const synthRef = useRef(window.speechSynthesis)
 
   useEffect(() => {
     const savedQuestions = localStorage.getItem('interviewQuestions')
@@ -114,14 +120,54 @@ const InterviewRoom = () => {
   }
 
 
-  const startInterview = () => {
-    setIsInterviewActive(true)
-  }
-
   // Get question text helper
   const getQuestionText = (q) => {
     if (!q) return "Loading question..."
     return q.question || (typeof q === 'string' ? q : "Loading question...")
+  }
+
+  // Text to Speech
+  const speakQuestion = (text) => {
+    if (!synthRef.current) return;
+    
+    // Stop any current speech
+    synthRef.current.cancel();
+
+    // Small delay before speaking so it feels natural
+    setTimeout(() => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      // Try to find a good female English voice
+      const voices = synthRef.current.getVoices();
+      const preferredVoice = voices.find(v => 
+        (v.name.includes('Female') || v.name.includes('Samantha') || v.name.includes('Google UK English Female')) && 
+        v.lang.startsWith('en')
+      ) || voices.find(v => v.lang.startsWith('en'));
+      
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+      
+      utterance.rate = 1.0;
+      utterance.pitch = 1.1;
+
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+
+      synthRef.current.speak(utterance);
+    }, 500);
+  };
+
+  // Speak question when it changes (and interview is active)
+  useEffect(() => {
+    if (isInterviewActive && questions.length > 0 && currentQuestion < questions.length) {
+      speakQuestion(getQuestionText(questions[currentQuestion]));
+    }
+  }, [currentQuestion, isInterviewActive, questions]);
+
+  const startInterview = () => {
+    setIsInterviewActive(true)
   }
 
   // Submit answer and move to next question
@@ -277,11 +323,18 @@ const InterviewRoom = () => {
       <div className="w-[420px] bg-slate-900/80 backdrop-blur-xl border-l border-white/10 p-8 flex flex-col overflow-y-auto z-10 shadow-2xl relative">
         <h2 className="text-2xl font-extrabold mb-8 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 tracking-tight text-center">AI Interviewer</h2>
         
-        {/* AI Avatar */}
-        <div className="relative w-28 h-28 mx-auto mb-8">
-          <div className="absolute inset-0 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-full animate-pulse blur-xl opacity-50"></div>
-          <div className="relative w-full h-full bg-slate-800 border-2 border-slate-700/50 rounded-full mx-auto flex items-center justify-center shadow-[0_0_30px_rgba(99,102,241,0.3)]">
-            <span className="text-5xl drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">🧬</span>
+        {/* AI Avatar Canvas */}
+        <div className="relative w-48 h-48 mx-auto mb-8">
+          <div className="absolute inset-0 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-full animate-pulse blur-xl opacity-30"></div>
+          <div className="relative w-full h-full bg-slate-800 border-2 border-slate-700/50 rounded-full mx-auto overflow-hidden shadow-[0_0_30px_rgba(99,102,241,0.3)]">
+            <Canvas camera={{ position: [0, 0, 3], fov: 45 }}>
+              <ambientLight intensity={1.5} />
+              <directionalLight position={[2, 2, 2]} intensity={2} />
+              <Environment preset="city" />
+              <Avatar isSpeaking={isSpeaking} />
+              {/* Disable controls so user can't spin the avatar around awkwardly */}
+              <OrbitControls enableZoom={false} enablePan={false} maxPolarAngle={Math.PI/2} minPolarAngle={Math.PI/2} />
+            </Canvas>
           </div>
         </div>
 
@@ -411,7 +464,10 @@ const InterviewRoom = () => {
 
               {/* End Interview Early */}
               <button
-                onClick={endInterview}
+                onClick={() => {
+                  if (synthRef.current) synthRef.current.cancel();
+                  endInterview();
+                }}
                 className="w-full bg-transparent hover:bg-slate-800 text-slate-400 hover:text-slate-300 py-3 px-4 rounded-xl font-medium transition-all duration-300 text-sm border border-transparent hover:border-white/5"
               >
                 Abort Session

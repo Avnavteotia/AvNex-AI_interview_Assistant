@@ -113,22 +113,39 @@ def generate_questions():
         data = request.get_json()
         role = data.get('role')
         level = data.get('level')
+        interview_type = data.get('interviewType', 'Technical')
         count = data.get('count', 5)
         
-        print(f"\n=== Generating {count} questions for {role} ({level}) ===")
+        print(f"\n=== Generating {count} {interview_type} questions for {role} ({level}) ===")
         
-        prompt = f"""Generate {count} interview questions for a {role} position at {level} level.
+        if interview_type == 'HR':
+            prompt = f"""Generate {count} HR interview questions for a {role} position at {level} level.
 
-Rules:
-- Return ONLY a JSON array
-- Each question must have "question" and "difficulty" fields
-- Difficulty: "easy", "medium", or "hard"
-- Questions should be verbal, not coding exercises
+Focus on:
+- Behavioral questions ("Tell me about a time when...")
+- Situational questions ("How would you handle...")
+- Soft skills, teamwork, conflict resolution
+- Career goals and motivation
+- Company culture fit
 
-Example format:
-[{{"question":"Tell me about yourself","difficulty":"easy"}},{{"question":"Explain REST APIs","difficulty":"medium"}}]
+Return ONLY a JSON array:
+[{{"question":"Tell me about yourself","difficulty":"easy"}}]
 
-Generate {count} questions now:"""
+Generate {count} HR questions now:"""
+        else:
+            prompt = f"""Generate {count} technical interview questions for a {role} position at {level} level.
+
+Focus on:
+- Technical concepts and fundamentals
+- Problem-solving scenarios
+- Best practices and design patterns
+- Real-world application experience
+- System design (for senior level)
+
+Return ONLY a JSON array:
+[{{"question":"Explain REST APIs","difficulty":"medium"}}]
+
+Generate {count} technical questions now:"""
         
         response = client.chat.completions.create(
             model=MODEL_NAME,
