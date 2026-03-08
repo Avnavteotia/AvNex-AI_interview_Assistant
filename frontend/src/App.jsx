@@ -3,6 +3,7 @@ import React from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Dashboard from './components/Dashboard'
 import InterviewRoom from './components/InterviewRoom'
+import ResultsPage from './components/ResultsPage'
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/interview/:id" element={<InterviewRoom />} />
+            <Route path="/results" element={<ResultsPage />} />
           </Routes>
         </main>
       </div>
