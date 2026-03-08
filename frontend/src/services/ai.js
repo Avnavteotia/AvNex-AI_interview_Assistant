@@ -61,8 +61,10 @@ class AIService {
     const fallbackQuestions = {
       'Frontend Developer': [
         { question: "Explain the difference between let, const, and var in JavaScript.", difficulty: "medium" },
-        { question: "What is the virtual DOM in React?", difficulty: "medium" },
-        { question: "How do you optimize a website's performance?", difficulty: "hard" }
+        { question: "What is the virtual DOM in React and why is it useful?", difficulty: "medium" },
+        { question: "How do you optimize a modern web application's performance?", difficulty: "hard" },
+        { question: "Can you explain CSS Flexbox and Grid, and when you'd use each?", difficulty: "medium" },
+        { question: "What are React Hooks and what problems do they solve?", difficulty: "medium" }
       ],
       'Backend Developer': [
         { question: "Explain REST API principles.", difficulty: "medium" },
@@ -76,12 +78,10 @@ class AIService {
       ]
     };
 
-    return fallbackQuestions[role] || [
-      { question: "Tell me about yourself.", difficulty: "easy" },
-      { question: "What are your strengths?", difficulty: "easy" },
-      { question: "Why do you want this job?", difficulty: "easy" }
-    ];
+    return fallbackQuestions[role] || fallbackQuestions['Frontend Developer'];
   }
+
+
 }
 
 export default new AIService();
