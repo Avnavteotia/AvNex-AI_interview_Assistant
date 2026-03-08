@@ -1,43 +1,30 @@
-// frontend/src/services/ai.js - AI service using Puter.js
-class AIService {
-  async generateQuestions(role, level, count = 10) {
-    const prompt = `Generate ${count} interview questions for a ${role} position at ${level} level. 
-    Return as a JSON array of objects with format: 
-    [{"question": "question text", "difficulty": "easy|medium|hard"}]
-    
-    Role: ${role}
-    Level: ${level}
-    
-    Make questions relevant to the role and appropriate for the experience level.`;
+// frontend/src/services/ai.js - AI service using backend API
+import axios from 'axios';
 
+const API_URL = 'http://localhost:5000';
+
+class AIService {
+  async generateQuestions(role, level, count = 5) {
     try {
-      const response = await puter.ai.chat(prompt, { model: 'gpt-4o' });
-      const questions = JSON.parse(response.text);
-      return questions;
+      const response = await axios.post(`${API_URL}/api/generate-questions`, {
+        role,
+        level,
+        count
+      });
+      return response.data.questions;
     } catch (error) {
       console.error('AI Question Generation Error:', error);
-      // Fallback questions if AI fails
       return this.getFallbackQuestions(role, level);
     }
   }
 
   async evaluateAnswer(question, answer) {
-    const prompt = `Evaluate this interview answer and provide feedback:
-    
-    Question: "${question}"
-    Answer: "${answer}"
-    
-    Provide evaluation as JSON:
-    {
-      "score": number (1-10),
-      "feedback": "detailed feedback",
-      "strengths": ["strength1", "strength2"],
-      "improvements": ["improvement1", "improvement2"]
-    }`;
-
     try {
-      const response = await puter.ai.chat(prompt, { model: 'gpt-4o' });
-      return JSON.parse(response.text);
+      const response = await axios.post(`${API_URL}/api/evaluate-answer`, {
+        question,
+        answer
+      });
+      return response.data;
     } catch (error) {
       console.error('AI Answer Evaluation Error:', error);
       return {
@@ -45,6 +32,27 @@ class AIService {
         feedback: "Answer received. Please continue to the next question.",
         strengths: ["Good communication"],
         improvements: ["Provide more specific examples"]
+      };
+    }
+  }
+
+  async evaluateInterview(qaPairs, role, level) {
+    try {
+      const response = await axios.post(`${API_URL}/api/evaluate-interview`, {
+        qa_pairs: qaPairs,
+        role,
+        level
+      });
+      return response.data;
+    } catch (error) {
+      console.error('AI Interview Evaluation Error:', error);
+      return {
+        overall_score: 0,
+        overall_feedback: "Could not evaluate the interview. Please try again.",
+        per_question: [],
+        strengths: [],
+        improvements: [],
+        recommendation: "Error"
       };
     }
   }

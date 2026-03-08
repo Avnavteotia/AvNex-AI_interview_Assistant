@@ -5,6 +5,7 @@ class SpeechService {
     this.isListening = false
     this.onResult = null
     this.onEnd = null
+    this.fullTranscript = '' // Accumulated finalized text
   }
 
   isSupported() {
@@ -25,32 +26,43 @@ class SpeechService {
       this.recognition.interimResults = true
       this.recognition.lang = 'en-US'
 
+      // Reset accumulated transcript when starting a new recording
+      this.fullTranscript = ''
+
       this.recognition.onstart = () => {
         this.isListening = true
         console.log('Speech recognition started')
       }
 
       this.recognition.onresult = (event) => {
+        // Build the full transcript from ALL results, not just the latest ones
         let finalTranscript = ''
         let interimTranscript = ''
 
-        for (let i = event.resultIndex; i < event.results.length; i++) {
+        for (let i = 0; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript
           if (event.results[i].isFinal) {
-            finalTranscript += transcript
+            finalTranscript += transcript + ' '
           } else {
             interimTranscript += transcript
           }
         }
 
+        // The full text is all finalized segments + current interim text
+        const fullText = finalTranscript.trim()
+        const displayText = fullText + (interimTranscript ? ' ' + interimTranscript : '')
+
         if (onResult) {
-          onResult(finalTranscript, interimTranscript)
+          onResult(fullText, displayText)
         }
       }
 
       this.recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error)
-        this.isListening = false
+        // Don't stop on "no-speech" errors, just keep listening
+        if (event.error !== 'no-speech') {
+          this.isListening = false
+        }
       }
 
       this.recognition.onend = () => {
