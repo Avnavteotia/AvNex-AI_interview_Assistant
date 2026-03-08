@@ -4,17 +4,18 @@ import axios from 'axios';
 const API_URL = 'http://localhost:5000';
 
 class AIService {
-  async generateQuestions(role, level, count = 5) {
+  async generateQuestions(role, level, interviewType, count = 5) {
     try {
       const response = await axios.post(`${API_URL}/api/generate-questions`, {
         role,
         level,
+        interviewType,
         count
       });
       return response.data.questions;
     } catch (error) {
       console.error('AI Question Generation Error:', error);
-      return this.getFallbackQuestions(role, level);
+      return this.getFallbackQuestions(role, level, interviewType);
     }
   }
 
@@ -57,7 +58,17 @@ class AIService {
     }
   }
 
-  getFallbackQuestions(role, level) {
+  getFallbackQuestions(role, level, interviewType) {
+    if (interviewType === 'HR') {
+      return [
+        { question: "Tell me about yourself and your background.", difficulty: "easy" },
+        { question: "Why do you want to work for our company?", difficulty: "easy" },
+        { question: "Describe a challenging situation you faced and how you handled it.", difficulty: "medium" },
+        { question: "Where do you see yourself in 5 years?", difficulty: "medium" },
+        { question: "Tell me about a time you had a conflict with a team member.", difficulty: "hard" }
+      ];
+    }
+    
     const fallbackQuestions = {
       'Frontend Developer': [
         { question: "Explain the difference between let, const, and var in JavaScript.", difficulty: "medium" },

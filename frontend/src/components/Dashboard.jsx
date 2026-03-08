@@ -9,6 +9,8 @@ const Dashboard = () => {
   const navigate = useNavigate()
   const [selectedRole, setSelectedRole] = useState('')
   const [selectedLevel, setSelectedLevel] = useState('fresher')
+  const [interviewType, setInterviewType] = useState('Technical')
+  const [questionCount, setQuestionCount] = useState(5)
 
   // ✅ CHANGE: New state for question generation loading
   const [isGenerating, setIsGenerating] = useState(false)
@@ -36,12 +38,13 @@ const Dashboard = () => {
 
     try {
       // ✅ CHANGE: Generate AI questions from backend
-      const questions = await AIService.generateQuestions(selectedRole, selectedLevel, 10)
+      const questions = await AIService.generateQuestions(selectedRole, selectedLevel, interviewType, questionCount)
 
       // ✅ CHANGE: Store data in localStorage for later use
       localStorage.setItem('interviewQuestions', JSON.stringify(questions))
       localStorage.setItem('interviewRole', selectedRole)
       localStorage.setItem('interviewLevel', selectedLevel)
+      localStorage.setItem('interviewType', interviewType)
 
       // Generate unique interview ID
       const interviewId = Date.now()
@@ -127,6 +130,41 @@ const Dashboard = () => {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
               </div>
             </div>
+          </div>
+
+          {/* Interview Type */}
+          <div className="relative group">
+            <label className="block text-sm font-semibold text-slate-300 mb-2 tracking-wide uppercase">
+              Interview Type
+            </label>
+            <div className="relative">
+              <select
+                value={interviewType}
+                onChange={(e) => setInterviewType(e.target.value)}
+                className="w-full bg-slate-800/80 text-white p-4 pr-10 border border-slate-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer group-hover:border-slate-600"
+              >
+                <option value="Technical" className="bg-slate-900 text-slate-200">Technical</option>
+                <option value="HR" className="bg-slate-900 text-slate-200">HR / Behavioral</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-slate-400">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Question Count */}
+          <div className="relative group">
+            <label className="block text-sm font-semibold text-slate-300 mb-2 tracking-wide uppercase">
+              Number of Questions
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="15"
+              value={questionCount}
+              onChange={(e) => setQuestionCount(Math.min(15, Math.max(1, Number(e.target.value) || 1)))}
+              className="w-full bg-slate-800/80 text-white p-4 border border-slate-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all group-hover:border-slate-600"
+            />
           </div>
         </div>
 
