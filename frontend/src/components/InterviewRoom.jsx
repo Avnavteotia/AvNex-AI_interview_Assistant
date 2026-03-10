@@ -19,16 +19,34 @@ const InterviewRoom = () => {
   const [answers, setAnswers] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isEvaluating, setIsEvaluating] = useState(false)
+  const [isCompleted, setIsCompleted] = useState(false)
   const [answerSubmitted, setAnswerSubmitted] = useState(false)
+  const [timeLeft, setTimeLeft] = useState(180) // 3 minutes in seconds
+  const [timerActive, setTimerActive] = useState(false)
 
   // AI Speech state
   const [isSpeaking, setIsSpeaking] = useState(false)
   const synthRef = useRef(window.speechSynthesis)
+  const timerIdRef = useRef(null)
 
   useEffect(() => {
     const savedQuestions = localStorage.getItem('interviewQuestions')
+    console.log('🔍 InterviewRoom: Reading questions from localStorage')
+    console.log('Saved questions string length:', savedQuestions?.length || 0)
+    
     if (savedQuestions) {
-      setQuestions(JSON.parse(savedQuestions))
+      try {
+        const parsed = JSON.parse(savedQuestions)
+        console.log('✅ Questions parsed successfully, count:', parsed.length)
+        console.log('Questions sample:', parsed.slice(0, 1))
+        setQuestions(parsed)
+      } catch (error) {
+        console.error('❌ Error parsing questions from localStorage:', error)
+        setQuestions([])
+      }
+    } else {
+      console.warn('⚠️  No questions found in localStorage')
+      setQuestions([])
     }
   }, [])
 
@@ -39,6 +57,16 @@ const InterviewRoom = () => {
       stopCamera()
     }
   }, [])
+
+  // Navigate to results after completion message is shown
+  useEffect(() => {
+    if (isCompleted) {
+      const timer = setTimeout(() => {
+        navigate('/results')
+      }, 3000) // Show completion message for 3 seconds
+      return () => clearTimeout(timer)
+    }
+  }, [isCompleted, navigate])
 
   const startCamera = async () => {
     try {
@@ -76,6 +104,17 @@ const InterviewRoom = () => {
   }
 
   const endInterview = async () => {
+    console.log('🏁 endInterview called')
+    console.log('Current state - Questions:', questions.length, 'Answers:', answers.length)
+    console.log('Questions array:', questions)
+    
+    if (!questions || questions.length === 0) {
+      console.error('❌ No questions loaded! Cannot evaluate interview.')
+      alert('Error: Interview questions were not loaded properly. Please try again.')
+      navigate('/')
+      return
+    }
+    
     // Stop listening if still active
     if (isListening) {
       SpeechService.stopListening()
@@ -96,20 +135,33 @@ const InterviewRoom = () => {
       question: getQuestionText(q),
       answer: finalAnswers[i] || 'No answer provided'
     }))
+    
+    console.log('🎬 Building Q&A pairs for evaluation:')
+    console.log('Total questions:', questions.length)
+    console.log('Total answers:', finalAnswers.length)
+    console.log('Q&A pairs sample:', qaPairs.slice(0, 2))
+    console.log('Full Q&A pairs:', JSON.stringify(qaPairs, null, 2))
 
     const role = localStorage.getItem('interviewRole') || 'General'
     const level = localStorage.getItem('interviewLevel') || 'fresher'
+    const sessionMode = localStorage.getItem('sessionMode') || 'Technical'
+
+    // Determine interview type: if there are both Technical and HR questions, mark as Combined
+    const hasTechnical = questions.some(q => !q.type || q.type === 'Technical')
+    const hasHR = questions.some(q => q.type === 'HR')
+    const interviewType = (hasTechnical && hasHR) ? 'Combined' : (hasHR ? 'HR' : 'Technical')
 
     setIsEvaluating(true)
 
     try {
-      const results = await AIService.evaluateInterview(qaPairs, role, level)
+      const results = await AIService.evaluateInterview(qaPairs, role, level, interviewType)
 
-      // Store results and navigate to results page
+      // Store results
       localStorage.setItem('interviewResults', JSON.stringify(results))
       localStorage.setItem('interviewAnswers', JSON.stringify(finalAnswers))
 
-      navigate('/results')
+      // Show completion message and then navigate
+      setIsCompleted(true)
     } catch (error) {
       console.error('Error evaluating interview:', error)
       alert('Error evaluating interview. Returning to dashboard.')
@@ -152,7 +204,12 @@ const InterviewRoom = () => {
       utterance.pitch = 1.1;
 
       utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        // Start timer when AI finishes speaking
+        setTimerActive(true);
+        setTimeLeft(180); // Reset to 3 minutes
+      };
       utterance.onerror = () => setIsSpeaking(false);
 
       synthRef.current.speak(utterance);
@@ -165,6 +222,30 @@ const InterviewRoom = () => {
       speakQuestion(getQuestionText(questions[currentQuestion]));
     }
   }, [currentQuestion, isInterviewActive, questions]);
+
+  // Timer countdown effect
+  useEffect(() => {
+    if (!timerActive || timeLeft <= 0) {
+      if (timeLeft <= 0 && timerActive && isInterviewActive) {
+        // Auto-submit when time runs out
+        handleSkipQuestion(); // Skip to next question when timer ends
+      }
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          setTimerActive(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    timerIdRef.current = interval;
+    return () => clearInterval(interval);
+  }, [timerActive, timeLeft, isInterviewActive]);
 
   const startInterview = () => {
     setIsInterviewActive(true)
@@ -197,6 +278,13 @@ const InterviewRoom = () => {
       stopCamera()
       setIsEvaluating(true)
       
+      if (!questions || questions.length === 0) {
+        console.error('❌ No questions loaded during evaluation!')
+        alert('Error: Interview data is missing. Please start a new interview.')
+        navigate('/')
+        return
+      }
+      
       const qaPairs = questions.map((q, i) => ({
         question: getQuestionText(q),
         answer: newAnswers[i] || 'No answer provided'
@@ -205,14 +293,28 @@ const InterviewRoom = () => {
       const role = localStorage.getItem('interviewRole') || 'General'
       const level = localStorage.getItem('interviewLevel') || 'fresher'
       
+      // Determine interview type: if there are both Technical and HR questions, mark as Combined
+      const hasTechnical = questions.some(q => !q.type || q.type === 'Technical')
+      const hasHR = questions.some(q => q.type === 'HR')
+      const interviewType = (hasTechnical && hasHR) ? 'Combined' : (hasHR ? 'HR' : 'Technical')
+      
       try {
-        const results = await AIService.evaluateInterview(qaPairs, role, level)
+        console.log('📊 Last question evaluation - Q&A pairs:')
+        console.log('Role:', role)
+        console.log('Level:', level)
+        console.log('Interview Type:', interviewType)
+        console.log('Questions count:', questions.length)
+        console.log('Answers count:', newAnswers.length)
+        console.log('Q&A Pairs:', JSON.stringify(qaPairs, null, 2))
         
-        // Store results and navigate
+        const results = await AIService.evaluateInterview(qaPairs, role, level, interviewType)
+        
+        // Store results
         localStorage.setItem('interviewResults', JSON.stringify(results))
         localStorage.setItem('interviewAnswers', JSON.stringify(newAnswers))
         
-        navigate('/results')
+        // Show completion message and then navigate
+        setIsCompleted(true)
       } catch (error) {
         console.error('Error evaluating interview:', error)
         alert('Error evaluating interview. Please try again.')
@@ -226,8 +328,54 @@ const InterviewRoom = () => {
         setTranscript('')
         setAnswerSubmitted(false)
         setIsSubmitting(false)
+        setTimerActive(false) // Stop timer
+        setTimeLeft(180) // Reset timer
       }, 500)
     }
+  }
+
+  // Skip to next question without submitting
+  const handleSkipQuestion = () => {
+    if (isListening) {
+      SpeechService.stopListening()
+      setIsListening(false)
+    }
+
+    setTimerActive(false) // Stop timer
+
+    // Save empty or current answer
+    const newAnswers = [...answers]
+    newAnswers[currentQuestion] = transcript || 'Skipped'
+    setAnswers(newAnswers)
+
+    // Check if this is the last question
+    if (currentQuestion >= questions.length - 1) {
+      // Last question - evaluate
+      submitAnswer();
+    } else {
+      // Move to next question
+      setTimeout(() => {
+        setCurrentQuestion(currentQuestion + 1)
+        setTranscript('')
+        setAnswerSubmitted(false)
+        setTimeLeft(180) // Reset timer
+        setTimerActive(false)
+      }, 300)
+    }
+  }
+
+  // Format time as MM:SS
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`
+  }
+
+  // Get timer color based on time left
+  const getTimerColor = () => {
+    if (timeLeft > 60) return 'text-emerald-400'; // Green
+    if (timeLeft > 30) return 'text-amber-400'; // Yellow
+    return 'text-rose-400'; // Red
   }
 
   // Start listening with SpeechService
@@ -258,7 +406,7 @@ const InterviewRoom = () => {
     ? Math.round(((currentQuestion + (answerSubmitted ? 1 : 0)) / questions.length) * 100) 
     : 0
 
-  // Show loading screen while evaluating
+  // Show loading screen while evaluating or after completion
   if (isEvaluating) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden">
@@ -266,9 +414,24 @@ const InterviewRoom = () => {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/20 blur-[120px] rounded-full pointer-events-none"></div>
         
         <div className="text-center z-10">
-          <div className="w-24 h-24 border-4 border-slate-800 border-t-blue-500 rounded-full animate-spin mx-auto mb-8 shadow-[0_0_30px_rgba(59,130,246,0.5)]"></div>
-          <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-3 tracking-tight">🧠 Analyzing Responses</h2>
-          <p className="text-slate-400 text-lg">AI is evaluating your interview performance...</p>
+          {isCompleted ? (
+            <>
+              <div className="w-24 h-24 bg-gradient-to-br from-emerald-400 to-green-600 rounded-full mx-auto mb-8 flex items-center justify-center text-5xl animate-bounce shadow-[0_0_40px_rgba(16,185,129,0.5)]">
+                ✓
+              </div>
+              <h2 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-green-400 mb-3 tracking-tight">
+                🎉 Interview Completed!
+              </h2>
+              <p className="text-slate-300 text-xl mb-2">Thank you for completing the interview</p>
+              <p className="text-slate-400 text-sm">Loading your results...</p>
+            </>
+          ) : (
+            <>
+              <div className="w-24 h-24 border-4 border-slate-800 border-t-blue-500 rounded-full animate-spin mx-auto mb-8 shadow-[0_0_30px_rgba(59,130,246,0.5)]"></div>
+              <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-3 tracking-tight">🧠 Analyzing Responses</h2>
+              <p className="text-slate-400 text-lg">AI is evaluating your interview performance...</p>
+            </>
+          )}
         </div>
       </div>
     )
@@ -376,18 +539,40 @@ const InterviewRoom = () => {
             <div className="mb-6 relative">
               <div className="absolute -left-8 top-1 w-1 h-[calc(100%-8px)] bg-gradient-to-b from-blue-500 to-transparent rounded-r-md"></div>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
-                  Question {currentQuestion + 1}
-                </h3>
-                {questions[currentQuestion]?.difficulty && (
-                  <span className={`text-xs px-2.5 py-1 rounded-md font-medium border ${
-                    questions[currentQuestion].difficulty === 'easy' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                    questions[currentQuestion].difficulty === 'medium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                    'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                  }`}>
-                    {questions[currentQuestion].difficulty.charAt(0).toUpperCase() + questions[currentQuestion].difficulty.slice(1)}
-                  </span>
-                )}
+                <div className="flex items-center gap-3">
+                  <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
+                    Question {currentQuestion + 1}
+                  </h3>
+                  {questions[currentQuestion]?.type && (
+                    <span className={`text-xs px-2.5 py-1 rounded-md font-medium border ${
+                      questions[currentQuestion].type === 'Technical' 
+                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
+                        : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                    }`}>
+                      {questions[currentQuestion].type === 'Technical' ? '🔧 Technical' : '💼 HR'}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  {/* Timer Display */}
+                  {timerActive && (
+                    <div className={`flex items-center gap-2 px-3 py-1 rounded-lg bg-slate-800/50 border border-white/10 ${getTimerColor()}`}>
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" />
+                      </svg>
+                      <span className={`font-bold text-sm ${getTimerColor()}`}>{formatTime(timeLeft)}</span>
+                    </div>
+                  )}
+                  {questions[currentQuestion]?.difficulty && (
+                    <span className={`text-xs px-2.5 py-1 rounded-md font-medium border ${
+                      questions[currentQuestion].difficulty === 'easy' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                      questions[currentQuestion].difficulty === 'medium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                      'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    }`}>
+                      {questions[currentQuestion].difficulty.charAt(0).toUpperCase() + questions[currentQuestion].difficulty.slice(1)}
+                    </span>
+                  )}
+                </div>
               </div>
               <p className="text-white text-lg leading-relaxed font-medium">
                 {getQuestionText(questions[currentQuestion])}
@@ -459,6 +644,17 @@ const InterviewRoom = () => {
                   ) : (
                     <>Submit & Continue ➔</>
                   )}
+                </button>
+              </div>
+              
+              {/* Skip Question Button - always visible when not listening and not submitted */}
+              <div className={`transition-all duration-500 overflow-hidden ${!answerSubmitted && !isListening ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>
+                <button
+                  onClick={handleSkipQuestion}
+                  disabled={isSubmitting}
+                  className="w-full bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600 text-white py-3 px-6 rounded-xl font-medium shadow-lg hover:shadow-slate-500/30 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  ⏭️ Skip Question
                 </button>
               </div>
 

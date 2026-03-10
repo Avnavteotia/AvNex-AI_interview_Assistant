@@ -9,8 +9,10 @@ const Dashboard = () => {
   const navigate = useNavigate()
   const [selectedRole, setSelectedRole] = useState('')
   const [selectedLevel, setSelectedLevel] = useState('fresher')
-  const [interviewType, setInterviewType] = useState('Technical')
+  const [sessionMode, setSessionMode] = useState('Technical')
   const [questionCount, setQuestionCount] = useState(5)
+  const [technicalCount, setTechnicalCount] = useState(3)
+  const [hrCount, setHrCount] = useState(2)
 
   // ✅ CHANGE: New state for question generation loading
   const [isGenerating, setIsGenerating] = useState(false)
@@ -35,22 +37,62 @@ const Dashboard = () => {
     }
 
     setIsGenerating(true) // ✅ CHANGE: start loading
+    console.log('🚀 Starting interview with:', { selectedRole, selectedLevel, sessionMode })
 
     try {
-      // ✅ CHANGE: Generate AI questions from backend
-      const questions = await AIService.generateQuestions(selectedRole, selectedLevel, interviewType, questionCount)
+      // ✅ CHANGE: Generate AI questions from backend based on mode
+      let generatedData
+      
+      if (sessionMode === 'Panel') {
+        // Panel: custom counts
+        console.log('📋 Panel mode - generating', technicalCount, 'technical +', hrCount, 'HR questions')
+        generatedData = await AIService.generateCombinedQuestions(
+          selectedRole, 
+          selectedLevel, 
+          technicalCount, 
+          hrCount
+        )
+        generatedData.questions = generatedData.questions || []
+        console.log('✅ Panel questions received:', generatedData.questions.length)
+      } else {
+        // Single type (Technical or HR)
+        console.log('📋 Single mode -', sessionMode, 'generating', questionCount, 'questions')
+        const singleResponse = await AIService.generateQuestions(
+          selectedRole, 
+          selectedLevel, 
+          sessionMode, 
+          questionCount
+        )
+        console.log('📝 Single mode response:', { type: typeof singleResponse, isArray: Array.isArray(singleResponse), length: singleResponse?.length })
+        generatedData = { questions: Array.isArray(singleResponse) ? singleResponse : (singleResponse?.questions || []) }
+        console.log('✅ Final questions count:', generatedData.questions?.length || 0)
+      }
+
+      // Validate we have questions
+      if (!generatedData.questions || generatedData.questions.length === 0) {
+        console.error('❌ No questions generated!')
+        alert('Error: No questions were generated. Please try again.')
+        setIsGenerating(false)
+        return
+      }
 
       // ✅ CHANGE: Store data in localStorage for later use
-      localStorage.setItem('interviewQuestions', JSON.stringify(questions))
+      console.log('📝 Dashboard: Storing interview config')
+      console.log('Questions count:', generatedData.questions?.length || 0)
+      console.log('Questions sample:', generatedData.questions?.slice(0, 1))
+      
+      localStorage.setItem('interviewQuestions', JSON.stringify(generatedData.questions))
       localStorage.setItem('interviewRole', selectedRole)
       localStorage.setItem('interviewLevel', selectedLevel)
-      localStorage.setItem('interviewType', interviewType)
+      localStorage.setItem('sessionMode', sessionMode)
+      
+      console.log('✅ localStorage updated with questions, navigating to interview...')
 
       // Generate unique interview ID
       const interviewId = Date.now()
       navigate(`/interview/${interviewId}`)
     } catch (error) {
-      console.error('Error generating questions:', error)
+      console.error('❌ Error generating questions:', error)
       alert('Error generating questions. Please try again.')
     } finally {
       setIsGenerating(false) // ✅ CHANGE: stop loading
@@ -132,41 +174,109 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Interview Type */}
+          {/* Session Mode */}
           <div className="relative group">
             <label className="block text-sm font-semibold text-slate-300 mb-2 tracking-wide uppercase">
-              Interview Type
+              Session Mode
             </label>
             <div className="relative">
               <select
-                value={interviewType}
-                onChange={(e) => setInterviewType(e.target.value)}
+                value={sessionMode}
+                onChange={(e) => setSessionMode(e.target.value)}
                 className="w-full bg-slate-800/80 text-white p-4 pr-10 border border-slate-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer group-hover:border-slate-600"
               >
-                <option value="Technical" className="bg-slate-900 text-slate-200">Technical</option>
-                <option value="HR" className="bg-slate-900 text-slate-200">HR / Behavioral</option>
+                <option value="Technical" className="bg-slate-900 text-slate-200"> Technical </option>
+                <option value="HR" className="bg-slate-900 text-slate-200">Behavioral</option>
+                <option value="Panel" className="bg-slate-900 text-slate-200">Panel</option>
               </select>
               <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-slate-400">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
               </div>
             </div>
+            <p className="text-xs text-slate-500 mt-2">
+              {sessionMode === 'Panel' && 'Customize the number of technical vs HR questions'}
+              {sessionMode === 'Technical' && 'Focus on technical concepts and problem-solving'}
+              {sessionMode === 'HR' && 'Focus on behavioral and soft skills'}
+            </p>
           </div>
 
-          {/* Question Count */}
-          <div className="relative group">
-            <label className="block text-sm font-semibold text-slate-300 mb-2 tracking-wide uppercase">
-              Number of Questions
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="15"
-              value={questionCount}
-              onChange={(e) => setQuestionCount(Math.min(15, Math.max(1, Number(e.target.value) || 1)))}
-              className="w-full bg-slate-800/80 text-white p-4 border border-slate-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all group-hover:border-slate-600"
-            />
-          </div>
+        {/* Question Count (for Technical/HR only) */}
+          {sessionMode !== 'Panel' && (
+            <div className="relative group">
+              <label className="block text-sm font-semibold text-slate-300 mb-2 tracking-wide uppercase">
+                Number of Questions
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="15"
+                value={questionCount}
+                onChange={(e) => setQuestionCount(Math.min(15, Math.max(1, Number(e.target.value) || 1)))}
+                className="w-full bg-slate-800/80 text-white p-4 border border-slate-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all group-hover:border-slate-600"
+              />
+            </div>
+          )}
         </div>
+
+        {/* Panel Configuration (shown only in Panel mode) */}
+        {sessionMode === 'Panel' && (
+          <div className="mt-8 pt-8 border-t border-slate-700/50">
+            <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+              <span className="text-indigo-400">⚙️</span> Customize Your Panel
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Technical Questions Count */}
+              <div className="relative group">
+                <label className="block text-sm font-semibold text-slate-300 mb-3 tracking-wide uppercase">
+                  🔧 Technical Questions
+                </label>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    value={technicalCount}
+                    onChange={(e) => setTechnicalCount(Number(e.target.value))}
+                    className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                  <div className="w-16 bg-slate-800/80 text-white text-center py-2 px-3 border border-blue-500/30 rounded-lg font-semibold text-lg">
+                    {technicalCount}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 mt-2">Focus on problem-solving and technical depth</p>
+              </div>
+
+              {/* HR Questions Count */}
+              <div className="relative group">
+                <label className="block text-sm font-semibold text-slate-300 mb-3 tracking-wide uppercase">
+                  💼 HR Questions
+                </label>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    value={hrCount}
+                    onChange={(e) => setHrCount(Number(e.target.value))}
+                    className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                  />
+                  <div className="w-16 bg-slate-800/80 text-white text-center py-2 px-3 border border-indigo-500/30 rounded-lg font-semibold text-lg">
+                    {hrCount}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 mt-2">Assess soft skills and cultural fit</p>
+              </div>
+            </div>
+
+            {/* Total Questions Summary - Minimal display */}
+            <div className="mt-6 p-3 bg-slate-700/30 rounded-lg border border-slate-700/30">
+              <p className="text-xs text-slate-400">
+                <span className="font-medium text-slate-300">Interview Composition: </span>
+                {technicalCount} technical + {hrCount} behavioral = {technicalCount + hrCount} total
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Start Button */}
         <div className="mt-10">
